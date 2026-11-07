@@ -8,4 +8,4 @@ This repository contains an IP lookup tool. It contains the following functional
 
 **Flow Diagram**
 
-<img width="567" height="912" alt="IP Lookup Flow" src="https://github.com/user-attachments/assets/605b1d64-52a3-4ce2-8852-4f328c0f3044" />
+<img width="567" height="912" alt="IP Lookup Flow (1)" src="https://github.com/user-attachments/assets/c32ff26a-4d67-45ff-95b8-395c690a2987" />
