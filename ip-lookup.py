@@ -1,4 +1,7 @@
+from asyncio import subprocess
 import os
+import re
+import subprocess
 import requests
 import ipaddress
 # ------------
@@ -87,7 +90,34 @@ def isValidIp(ip):
         return True
     except ValueError:
         return False
-    
+
+# Function to check if the target IP is reachable and measure latency (ping)
+def checkLatency(ip):
+    if not ip:
+        return None
+
+    # Windows uses '-n' for packet count, while Mac/Linux uses '-c'
+    param = "-n" if os.name == "nt" else "-c"
+    command = ["ping", param, "2", ip]
+
+    try:
+        # Run the ping command in the background and capture the text output
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=6)
+        
+        # returncode 0 means at least one ping got a reply
+        if result.returncode == 0:
+            # Look for the average time in the ping output (works on Windows and Mac/Linux)
+            match = re.search(r"Average = (\d+ms)|min/avg/max/[a-z]+ = [\d.]+/([\d.]+)/", result.stdout)
+            if match:
+                avg_ping = match.group(1) or f"{match.group(2)}ms"
+                return f"Reachable (Avg Latency: {avg_ping})"
+            return "Reachable"
+        else:
+            return "Unreachable (Request timed out or blocked by firewall)"
+            
+    except Exception:
+        return "Unreachable (Ping check failed)"
+       
 # Function to create a Google Maps link from coordinates
 def getMapLink(lat, lon):
 
@@ -96,9 +126,22 @@ def getMapLink(lat, lon):
         return f"https://www.google.com/maps?q={lat},{lon}"
     return "Map link unavailable"
 
+# Function to check if the ip is valid
+def isValidIp(ip):
+
+    #  Check if the input is empty
+    if ip == "": return True
+    
+    # Check for the validity using the ipaddress library
+    try:
+        ipaddress.ip_address(ip)
+        return True
+    except ValueError:
+        return False
+    
 # Function to output the results
-def output(ipresult, abuseresult=None):
-    print("--------------------------------")
+def output(ipresult, abuseresult=None, latencyresult=None):
+    print("----------------------------------------")
 
     # Ensures that we are able to get an IP from the lookup
     if ipresult and ipresult.get("status") == "success":
@@ -120,11 +163,13 @@ def output(ipresult, abuseresult=None):
         print(f"Coordinates: (Latitude) {ipresult.get("lat")}, (Longitude) {ipresult.get("lon")}")
         print(f"Map Link:    {map_link}")
         print(f"ISP: {ipresult.get("isp")}")
+        print(f"ASN:          {ipresult.get('as')}")
+        print(f"Reachability: {latencyresult}")
     else:
         print("Could not retrieve IP geolocation data.")
      
     # AbuseIPDB Report Result
-    print("--------------------------------")
+    print("----------------------------------------")
     if abuseresult:
 
         # Extract report data from the AbuseIPDB response
@@ -152,7 +197,7 @@ def output(ipresult, abuseresult=None):
         print(f"Web Report Link:   https://www.abuseipdb.com/check/{abuseresult.get('ipAddress')}")
     else:
         print("AbuseIPDB data unavailable.")
-    print("--------------------------------")
+    print("----------------------------------------")
 
 
     
@@ -182,7 +227,8 @@ while True:
 
     # Query AbuseIPDB using the resolved IP address
     abuseResult = checkAbuseIpDb(resolvedIp)
+    latencyResult = checkLatency(resolvedIp)
     
     # Display the output
-    output(ipResult, abuseResult)
+    output(ipResult, abuseResult, latencyResult)
 
