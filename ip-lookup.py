@@ -88,19 +88,37 @@ def isValidIp(ip):
     except ValueError:
         return False
     
+# Function to create a Google Maps link from coordinates
+def getMapLink(lat, lon):
+
+    # Ensures that latitude and longitude exists before creating the link
+    if lat is not None and lon is not None:
+        return f"https://www.google.com/maps?q={lat},{lon}"
+    return "Map link unavailable"
 
 # Function to output the results
 def output(ipresult, abuseresult=None):
     print("--------------------------------")
+
+    # Ensures that we are able to get an IP from the lookup
     if ipresult and ipresult.get("status") == "success":
         target_ip = ipresult.get("query")
+
+        # Check if the address is IPv4 or IPv6
         ip_version = f"IPv{ipaddress.ip_address(target_ip).version}" if target_ip else "Unknown"
 
-        print(f"IP Address: {ipresult.get("query")}")
+        # Grab coordinates and generate the Google Maps URL
+        lat = ipresult.get("lat")
+        lon = ipresult.get("lon")
+        map_link = getMapLink(lat, lon)
+
+        # Print out the location & ISP information
+        print(f"IP Address: {ipresult.get("query")} ({ip_version})")
         print(f"Country: {ipresult.get("country")}")
         print(f"Region: {ipresult.get("regionName")}")
         print(f"City: {ipresult.get("city")}")
         print(f"Coordinates: (Latitude) {ipresult.get("lat")}, (Longitude) {ipresult.get("lon")}")
+        print(f"Map Link:    {map_link}")
         print(f"ISP: {ipresult.get("isp")}")
     else:
         print("Could not retrieve IP geolocation data.")
@@ -108,19 +126,23 @@ def output(ipresult, abuseresult=None):
     # AbuseIPDB Report Result
     print("--------------------------------")
     if abuseresult:
+
+        # Extract report data from the AbuseIPDB response
         total_reports = abuseresult.get("totalReports", 0)
         confidence_score = abuseresult.get("abuseConfidenceScore", 0)
         last_reported = abuseresult.get("lastReportedAt") or "Never"
         usage_type = abuseresult.get("usageType") or "Unknown"
         is_whitelisted = abuseresult.get("isWhitelisted")
 
+        # Decide if the IP is actually risky based on the confidence score
         if confidence_score >= 25:
             status = "REPORTED / SUSPICIOUS"
         elif total_reports > 0:
             status = "SAFE (Reported, but 0% Abuse Confidence)"
         else:
             status = "CLEAN (No Reports)"
-            
+
+        # Display the security report summary   
         print(f"Status:            {status}")
         print(f"Total Reports:     {total_reports} (in last 90 days)")
         print(f"Abuse Confidence:  {confidence_score}%")
