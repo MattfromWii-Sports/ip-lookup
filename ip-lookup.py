@@ -41,7 +41,21 @@ def isValidIp(ip):
     except ValueError:
         return False
     
+
+# Function to output the results
+def output(ipresult):
+    print("--------------------------------")
+    if ipresult:
+        print(f"IP Address: {ipresult.get("query")}")
+        print(f"Country: {ipresult.get("country")}")
+        print(f"Region: {ipresult.get("regionName")}")
+        print(f"City: {ipresult.get("city")}")
+        print(f"Coordinates: (Latitude) {ipresult.get("lat")}, (Longitude) {ipresult.get("lon")}")
+        print(f"ISP: {ipresult.get("isp")}")
+    print("--------------------------------") 
     
+    # Add other output here
+
 # ------------
 # Main loop
 # ------------
@@ -62,11 +76,9 @@ while True:
         ipResult = getIpApi()
     else:
         ipResult = getIpApi(ip)
-    print(ipResult)
-
-
     
+    # ADD OTHER CODE HERE
+    
+    # Display the output
+    output(ipResult)
 
-
-        
-        
