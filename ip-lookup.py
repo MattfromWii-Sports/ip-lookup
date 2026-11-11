@@ -1,9 +1,12 @@
-from asyncio import subprocess
 import os
 import re
 import subprocess
 import requests
 import ipaddress
+from dotenv import load_dotenv
+
+load_dotenv()
+
 # ------------
 # API variables
 # ------------
@@ -14,9 +17,8 @@ ipapiUrl = "http://ip-api.com/json/"
 # For checking if the IP is reported on AbuseIPDB
 abuseIpDbUrl = "https://api.abuseipdb.com/api/v2/check"
 
-# API Key (hardcoded)
-ABUSEIPDB_API_KEY = os.getenv("ABUSEIPDB_API_KEY", "732e8aca720a72fbcaef825815908d99a3315b93fb8632ba93ef948f060d6526d75bf9d5938d89f5")
-
+# Get API key from .env
+ABUSEIPDB_API_KEY = os.getenv("ABUSEIPDB_API_KEY")
 
 # ------------
 # Functions
