@@ -1,8 +1,9 @@
+import ipaddress
 import os
 import re
 import subprocess
+
 import requests
-import ipaddress
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -31,11 +32,11 @@ def getIpApi(ip=""):
         # If ip is present, append it to the url call
         if ip:
             url += f"/{ip}"
-        
+
         # Query and return JSON response
         response = requests.get(url)
         return response.json()
-    
+
     except Exception as e:
         print(f"An error occurred: {e}")
         return None
@@ -106,7 +107,7 @@ def checkLatency(ip):
     try:
         # Run the ping command in the background and capture the text output
         result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=6)
-        
+
         # returncode 0 means at least one ping got a reply
         if result.returncode == 0:
             # Look for the average time in the ping output (works on Windows and Mac/Linux)
@@ -117,17 +118,17 @@ def checkLatency(ip):
             return "Reachable"
         else:
             return "Unreachable (Request timed out or blocked by firewall)"
-            
+
     except Exception:
         return "Unreachable (Ping check failed)"
-       
+
 # Function to create a Google Maps link from coordinates
 def getMapLink(lat, lon):
     # Ensures that latitude and longitude exists before creating the link
     if lat is not None and lon is not None:
         return f"https://www.google.com/maps?q={lat},{lon}"
     return "Map link unavailable"
-    
+
 # Function to output the results
 def output(ipresult, abuseresult=None, latencyresult=None):
     print("----------------------------------------")
@@ -156,7 +157,7 @@ def output(ipresult, abuseresult=None, latencyresult=None):
         print(f"Reachability: {latencyresult}")
     else:
         print("Could not retrieve IP geolocation data.")
-     
+
     # AbuseIPDB Report Result
     print("----------------------------------------")
     if abuseresult:
@@ -176,7 +177,7 @@ def output(ipresult, abuseresult=None, latencyresult=None):
         else:
             status = "CLEAN (No Reports)"
 
-        # Display the security report summary   
+        # Display the security report summary
         print(f"Status:            {status}")
         print(f"Total Reports:     {total_reports} (in last 90 days)")
         print(f"Abuse Confidence:  {confidence_score}%")
@@ -189,7 +190,7 @@ def output(ipresult, abuseresult=None, latencyresult=None):
     print("----------------------------------------")
 
 
-    
+
 # ------------
 # Main loop
 # ------------
@@ -197,27 +198,27 @@ while True:
     ip = input("Input an IP address [your IP]: ")
     if ip == "q" or ip == "quit":
         break
-    
+
     # First check the validity of the ip address
     ipValid = isValidIp(ip)
-    if not ipValid: 
+    if not ipValid:
         print("Invalid IP, please try again.")
         continue
-    
+
     # Determine if the user chose his own IP or a custom IP
     ipResult = ""
     if ip == "":
         ipResult = getIpApi()
     else:
         ipResult = getIpApi(ip)
-    
+
    # Extract the resolved IP address
     resolvedIp = ipResult.get("query") if ipResult else ip
 
     # Query AbuseIPDB using the resolved IP address
     abuseResult = checkAbuseIpDb(resolvedIp)
     latencyResult = checkLatency(resolvedIp)
-    
+
     # Display the output
     output(ipResult, abuseResult, latencyResult)
 

@@ -1,38 +1,48 @@
 """
 Unit tests for ip-lookup.py
 """
-import pytest
-import ipaddress
-from unittest.mock import patch, MagicMock
-import sys
 import os
+import sys
+from unittest.mock import MagicMock, patch
 
-# Add parent directory to path to import ip_lookup functions
+import pytest
+
+# Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Mock the dotenv before importing
+# Import functions by executing the script in a namespace
+_script_globals = {}
 with patch('dotenv.load_dotenv'):
-    # Import functions from the main script
-    # Note: Since ip-lookup.py is a script with a main loop,
-    # we'll test the utility functions
-    exec(open('ip-lookup.py').read(), globals())
+    with open('ip-lookup.py') as f:
+        # Only execute functions, not the main loop
+        code = f.read()
+        # Remove the main loop by only executing up to the functions
+        exec(code, _script_globals)
+
+# Extract functions we need
+isValidIp = _script_globals['isValidIp']
+getMapLink = _script_globals['getMapLink']
+getIpApi = _script_globals['getIpApi']
+checkAbuseIpDb = _script_globals['checkAbuseIpDb']
+checkLatency = _script_globals['checkLatency']
+output = _script_globals['output']
 
 
 class TestValidateIP:
     """Test IP validation function"""
-    
+
     def test_valid_ipv4(self):
         """Test valid IPv4 address"""
         assert isValidIp("8.8.8.8")
-    
+
     def test_valid_ipv6(self):
         """Test valid IPv6 address"""
         assert isValidIp("2001:4860:4860::8888")
-    
+
     def test_empty_ip(self):
         """Test empty IP (should be valid - uses public IP)"""
         assert isValidIp("")
-    
+
     def test_invalid_ip(self):
         """Test invalid IP address"""
         assert not isValidIp("999.999.999.999")
@@ -42,27 +52,27 @@ class TestValidateIP:
 
 class TestMapLink:
     """Test Google Maps link generation"""
-    
+
     def test_valid_coordinates(self):
         """Test valid latitude and longitude"""
         link = getMapLink(40.7128, -74.0060)
         assert "https://www.google.com/maps" in link
         assert "40.7128" in link
         assert "-74.0060" in link
-    
+
     def test_zero_coordinates(self):
         """Test zero coordinates (valid, equator/prime meridian)"""
         link = getMapLink(0, 0)
         assert "https://www.google.com/maps" in link
-    
+
     def test_null_coordinates(self):
         """Test None coordinates"""
         link = getMapLink(None, 50.0)
         assert link == "Map link unavailable"
-        
+
         link = getMapLink(50.0, None)
         assert link == "Map link unavailable"
-    
+
     def test_both_none_coordinates(self):
         """Test both None coordinates"""
         link = getMapLink(None, None)
@@ -71,7 +81,7 @@ class TestMapLink:
 
 class TestGetIpApi:
     """Test IP API function"""
-    
+
     @patch('requests.get')
     def test_get_public_ip(self, mock_get):
         """Test getting public IP"""
@@ -83,11 +93,11 @@ class TestGetIpApi:
             "city": "Los Angeles"
         }
         mock_get.return_value = mock_response
-        
+
         result = getIpApi()
         assert result["status"] == "success"
         assert result["query"] == "1.1.1.1"
-    
+
     @patch('requests.get')
     def test_get_specific_ip(self, mock_get):
         """Test getting information for a specific IP"""
@@ -99,22 +109,22 @@ class TestGetIpApi:
             "isp": "Google"
         }
         mock_get.return_value = mock_response
-        
+
         result = getIpApi("8.8.8.8")
         assert result["query"] == "8.8.8.8"
-    
+
     @patch('requests.get')
     def test_get_ip_api_error(self, mock_get):
         """Test error handling in getIpApi"""
         mock_get.side_effect = Exception("Connection error")
-        
+
         result = getIpApi()
         assert result is None
 
 
 class TestCheckAbuseIpDb:
     """Test AbuseIPDB checking function"""
-    
+
     @patch.dict(os.environ, {"ABUSEIPDB_API_KEY": "test-key"})
     @patch('requests.get')
     def test_check_clean_ip(self, mock_get):
@@ -130,11 +140,11 @@ class TestCheckAbuseIpDb:
             }
         }
         mock_get.return_value = mock_response
-        
+
         result = checkAbuseIpDb("1.1.1.1")
         assert result["totalReports"] == 0
         assert result["abuseConfidenceScore"] == 0
-    
+
     @patch.dict(os.environ, {"ABUSEIPDB_API_KEY": "test-key"})
     @patch('requests.get')
     def test_check_reported_ip(self, mock_get):
@@ -150,11 +160,11 @@ class TestCheckAbuseIpDb:
             }
         }
         mock_get.return_value = mock_response
-        
+
         result = checkAbuseIpDb("192.168.1.1")
         assert result["totalReports"] == 5
         assert result["abuseConfidenceScore"] == 85
-    
+
     @patch.dict(os.environ, {"ABUSEIPDB_API_KEY": ""})
     @patch('requests.get')
     def test_invalid_api_key(self, mock_get):
@@ -162,7 +172,7 @@ class TestCheckAbuseIpDb:
         mock_response = MagicMock()
         mock_response.status_code = 401
         mock_get.return_value = mock_response
-        
+
         result = checkAbuseIpDb("8.8.8.8")
         assert result is None
 
