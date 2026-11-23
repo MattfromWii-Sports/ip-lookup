@@ -23,21 +23,21 @@ class TestValidateIP:
     
     def test_valid_ipv4(self):
         """Test valid IPv4 address"""
-        assert isValidIp("8.8.8.8") == True
+        assert isValidIp("8.8.8.8")
     
     def test_valid_ipv6(self):
         """Test valid IPv6 address"""
-        assert isValidIp("2001:4860:4860::8888") == True
+        assert isValidIp("2001:4860:4860::8888")
     
     def test_empty_ip(self):
         """Test empty IP (should be valid - uses public IP)"""
-        assert isValidIp("") == True
+        assert isValidIp("")
     
     def test_invalid_ip(self):
         """Test invalid IP address"""
-        assert isValidIp("999.999.999.999") == False
-        assert isValidIp("invalid.ip.address") == False
-        assert isValidIp("192.168.1") == False
+        assert not isValidIp("999.999.999.999")
+        assert not isValidIp("invalid.ip.address")
+        assert not isValidIp("192.168.1")
 
 
 class TestMapLink:

@@ -84,8 +84,9 @@ def checkAbuseIpDb(ip):
 def isValidIp(ip):
     # First check if the input is empty
     # If so, it is still considered valid
-    if ip == "": return True
-    
+    if ip == "":
+        return True
+
     # Check for the validity using the ipaddress library
     try:
         ipaddress.ip_address(ip)
@@ -122,24 +123,10 @@ def checkLatency(ip):
        
 # Function to create a Google Maps link from coordinates
 def getMapLink(lat, lon):
-
     # Ensures that latitude and longitude exists before creating the link
     if lat is not None and lon is not None:
         return f"https://www.google.com/maps?q={lat},{lon}"
     return "Map link unavailable"
-
-# Function to check if the ip is valid
-def isValidIp(ip):
-
-    #  Check if the input is empty
-    if ip == "": return True
-    
-    # Check for the validity using the ipaddress library
-    try:
-        ipaddress.ip_address(ip)
-        return True
-    except ValueError:
-        return False
     
 # Function to output the results
 def output(ipresult, abuseresult=None, latencyresult=None):
@@ -158,13 +145,13 @@ def output(ipresult, abuseresult=None, latencyresult=None):
         map_link = getMapLink(lat, lon)
 
         # Print out the location & ISP information
-        print(f"IP Address: {ipresult.get("query")} ({ip_version})")
-        print(f"Country: {ipresult.get("country")}")
-        print(f"Region: {ipresult.get("regionName")}")
-        print(f"City: {ipresult.get("city")}")
-        print(f"Coordinates: (Latitude) {ipresult.get("lat")}, (Longitude) {ipresult.get("lon")}")
+        print(f"IP Address: {ipresult.get('query')} ({ip_version})")
+        print(f"Country: {ipresult.get('country')}")
+        print(f"Region: {ipresult.get('regionName')}")
+        print(f"City: {ipresult.get('city')}")
+        print(f"Coordinates: (Latitude) {ipresult.get('lat')}, (Longitude) {ipresult.get('lon')}")
         print(f"Map Link:    {map_link}")
-        print(f"ISP: {ipresult.get("isp")}")
+        print(f"ISP: {ipresult.get('isp')}")
         print(f"ASN:          {ipresult.get('as')}")
         print(f"Reachability: {latencyresult}")
     else:
