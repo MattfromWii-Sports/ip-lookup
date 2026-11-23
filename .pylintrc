@@ -1,0 +1,15 @@
+[MASTER]
+# Add files or directories to the ignore-list
+ignore-patterns=test_.*?py
+
+[MESSAGES CONTROL]
+# C0111: missing-docstring
+disable=C0111,R0913,R0914
+
+[FORMAT]
+# Maximum number of characters on a single line
+max-line-length=120
+
+[DESIGN]
+# Maximum number of arguments for function / method
+max-args=5

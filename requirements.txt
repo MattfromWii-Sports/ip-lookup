@@ -1,2 +1,11 @@
 requests
 python-dotenv
+
+# Development & Testing (optional)
+pytest>=7.0.0
+pytest-cov>=4.0.0
+pytest-mock>=3.10.0
+ruff>=0.1.0
+pylint>=2.17.0
+bandit>=1.7.5
+safety>=2.3.0
