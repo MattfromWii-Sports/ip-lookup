@@ -56,7 +56,6 @@ jobs:
       
       - name: Run unit tests
         run: pytest tests/ -v --cov=. --cov-report=html --cov-report=term
-        continue-on-error: true
       
       - name: Upload coverage report as artifact
         uses: actions/upload-artifact@v4
@@ -64,7 +63,6 @@ jobs:
           name: coverage-report
           path: htmlcov/
           retention-days: 30
-        continue-on-error: true
 
   # 3. Security scanning
   # Uses Bandit to scan the code
@@ -89,11 +87,9 @@ jobs:
       
       - name: Run Bandit (security linter)
         run: bandit -r . -f json -o bandit-report.json
-        continue-on-error: true
       
       - name: Check dependencies for known vulnerabilities
         run: safety check --json
-        continue-on-error: true
 
   # 4. Build and package
   build:

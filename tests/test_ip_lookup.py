@@ -16,7 +16,7 @@ with patch("dotenv.load_dotenv"):
     with open("ip-lookup.py") as f:
         code = f.read()
         # Remove the main loop - everything after "# -----------" before "while True:"
-        code = code.split("while True:")[0]  # Only get functions, not main loop
+        code = code.split('if __name__ == "__main__":')[0] if 'if __name__ == "__main__":' in code else code.split("while True:")[0]  # Only get functions, not main loop
         exec(code, _script_globals)
 
 # Extract functions we need
@@ -26,6 +26,8 @@ getIpApi = _script_globals['getIpApi']
 checkAbuseIpDb = _script_globals['checkAbuseIpDb']
 checkLatency = _script_globals['checkLatency']
 output = _script_globals['output']
+checkOpenPortsAndVulns = _script_globals['checkOpenPortsAndVulns']
+parsePorts = _script_globals['parsePorts']
 
 
 class TestValidateIP:
@@ -176,6 +178,101 @@ class TestCheckAbuseIpDb:
         result = checkAbuseIpDb("8.8.8.8")
         assert result is None
 
+class TestOpenPortsAndVulns:
+    """Test Shodan InternetDB open ports & CVE scanner and port parser"""
+
+    def test_parse_ports_valid(self):
+        assert parsePorts("80, 443, 22") == [80, 443, 22]
+
+    def test_parse_ports_empty_and_invalid(self):
+        assert parsePorts("") == []
+        assert parsePorts("80, abc, 0, 70000, 53") == [80, 53]
+
+    @patch('requests.get')
+    def test_check_open_ports_success(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "ports": [53, 80, 443],
+            "vulns": ["CVE-2023-1234"],
+            "hostnames": ["dns.google"]
+        }
+        mock_get.return_value = mock_response
+
+        result = checkOpenPortsAndVulns("8.8.8.8")
+        assert result["ports"] == [53, 80, 443]
+        assert "CVE-2023-1234" in result["vulns"]
+
+    @patch('requests.get')
+    def test_check_open_ports_404(self, mock_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        mock_get.return_value = mock_response
+
+        result = checkOpenPortsAndVulns("198.51.100.1")
+        assert result["ports"] == []
+        assert result["vulns"] == []
+
+    def test_check_open_ports_empty_ip(self):
+        assert checkOpenPortsAndVulns("") is None
+
+
+class TestLatency:
+    """Test ping latency check"""
+
+    @patch('subprocess.run')
+    def test_reachable_linux_format(self, mock_run):
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="rtt min/avg/max/mdev = 10.1/14.5/20.2/1.1 ms"
+        )
+        assert checkLatency("8.8.8.8") == "Reachable (Avg Latency: 14.5ms)"
+
+    @patch('subprocess.run')
+    def test_reachable_windows_format(self, mock_run):
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="Minimum = 12ms, Maximum = 18ms, Average = 15ms"
+        )
+        assert checkLatency("8.8.8.8") == "Reachable (Avg Latency: 15ms)"
+
+    @patch('subprocess.run')
+    def test_unreachable(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=1, stdout="")
+        assert "Unreachable" in checkLatency("192.0.2.1")
+
+
+class TestOutput:
+    """Test console output formatting"""
+
+    def test_output_with_ports_and_abuse(self, capsys):
+        ip_data = {
+            "status": "success",
+            "query": "8.8.8.8",
+            "country": "United States",
+            "regionName": "Virginia",
+            "city": "Ashburn",
+            "lat": 39.03,
+            "lon": -77.5,
+            "isp": "Google LLC",
+            "as": "AS15169 Google LLC"
+        }
+        abuse_data = {
+            "totalReports": 10,
+            "abuseConfidenceScore": 0,
+            "lastReportedAt": "2026-11-10T06:26:48+00:00",
+            "usageType": "Content Delivery Network",
+            "isWhitelisted": True,
+            "ipAddress": "8.8.8.8"
+        }
+        port_data = {"ports": [53, 443], "vulns": [], "hostnames": ["dns.google"]}
+
+        output(ip_data, abuse_data, "Reachable (Avg Latency: 15ms)", port_data, [443, 22])
+        captured = capsys.readouterr().out
+
+        assert "SAFE (Reported, but 0% Abuse Confidence)" in captured
+        assert "Port 443: OPEN" in captured
+        assert "Port 22: CLOSED / NOT INDEXED" in captured
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
