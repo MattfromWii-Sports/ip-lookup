@@ -3,6 +3,7 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [ main ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
 
@@ -133,6 +134,7 @@ jobs:
           path: dist/
 
   # 5. Create Release (runs on tags)
+  # Only runs if pushed with a tag to prevent excessive releases
   release:
     needs: build
     runs-on: ubuntu-latest
