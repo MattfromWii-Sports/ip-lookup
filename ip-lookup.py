@@ -18,6 +18,9 @@ ipapiUrl = "http://ip-api.com/json/"
 # For checking if the IP is reported on AbuseIPDB
 abuseIpDbUrl = "https://api.abuseipdb.com/api/v2/check"
 
+# For open port and CVE vulnerability lookup (Passive)
+shodanInternetDbUrl = "https://internetdb.shodan.io/"
+
 # Get API key from .env
 ABUSEIPDB_API_KEY = os.getenv("ABUSEIPDB_API_KEY")
 
@@ -80,6 +83,36 @@ def checkAbuseIpDb(ip):
         print(f"An error occurred querying AbuseIPDB: {e}")
         return None
 
+# Function to fetch passive open ports and known CVEs from Shodan InternetDB
+def checkOpenPortsAndVulns(ip):
+    if not ip:
+        return None
+
+    try:
+        # Query Shodan InternetDB for the given IP
+        response = requests.get(f"{shodanInternetDbUrl}{ip}", timeout=5)
+        if response.status_code == 200:
+            return response.json()
+        elif response.status_code == 404:
+            # No data returned (404)
+            return {"ports": [], "vulns": [], "hostnames": [], "tags": []}
+        else:
+            print(f"Shodan InternetDB Error: HTTP {response.status_code}")
+            return None
+    except Exception as e:
+        print(f"An error occurred querying Shodan InternetDB: {e}")
+        return None
+
+# Parsing function on port lists
+def parsePorts(port_input):
+    if not port_input.strip():
+        return []
+    ports = []
+    for item in port_input.split(","):
+        item = item.strip()
+        if item.isdigit() and 1 <= int(item) <= 65535:
+            ports.append(int(item))
+    return ports
 
 # Function to check if the ip is valid
 def isValidIp(ip):
@@ -130,7 +163,7 @@ def getMapLink(lat, lon):
     return "Map link unavailable"
 
 # Function to output the results
-def output(ipresult, abuseresult=None, latencyresult=None):
+def output(ipresult, abuseresult=None, latencyresult=None, portresult=None, target_ports=None):
     print("----------------------------------------")
 
     # Ensures that we are able to get an IP from the lookup
@@ -157,6 +190,27 @@ def output(ipresult, abuseresult=None, latencyresult=None):
         print(f"Reachability: {latencyresult}")
     else:
         print("Could not retrieve IP geolocation data.")
+
+    # Open Ports & Vulnerability Result
+    print("----------------------------------------")
+    if portresult is not None:
+        open_ports = portresult.get("ports", [])
+        vulns = portresult.get("vulns", [])
+        hostnames = portresult.get("hostnames", [])
+
+        print(f"Hostnames:         {', '.join(hostnames) if hostnames else 'None'}")
+        print(f"All Open Ports:    {', '.join(map(str, open_ports)) if open_ports else 'None detected'}")
+
+        # Check specific ports if the user typed any
+        if target_ports:
+            print("Requested Ports Check:")
+            for p in target_ports:
+                state = "OPEN" if p in open_ports else "CLOSED / NOT INDEXED"
+                print(f"  - Port {p}: {state}")
+
+        print(f"Known CVEs:        {', '.join(vulns) if vulns else 'None detected'}")
+    else:
+        print("Port & vulnerability data unavailable.")
 
     # AbuseIPDB Report Result
     print("----------------------------------------")
@@ -212,13 +266,20 @@ while True:
     else:
         ipResult = getIpApi(ip)
 
+    # Optional port input 
+    port_input = input("Specific ports to check (comma-separated) [Enter for all]: ").strip()
+    target_ports = parsePorts(port_input)
+
+    ipResult = getIpApi() if ip == "" else getIpApi(ip)
+
    # Extract the resolved IP address
     resolvedIp = ipResult.get("query") if ipResult else ip
 
-    # Query AbuseIPDB using the resolved IP address
+    # Query AbuseIPDB using the resolved IP address, and Ports/CVE
     abuseResult = checkAbuseIpDb(resolvedIp)
     latencyResult = checkLatency(resolvedIp)
+    portResult = checkOpenPortsAndVulns(resolvedIp)
 
     # Display the output
-    output(ipResult, abuseResult, latencyResult)
+    output(ipResult, abuseResult, latencyResult, portResult, target_ports)
 
