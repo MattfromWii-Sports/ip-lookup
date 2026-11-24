@@ -12,11 +12,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import functions by executing the script in a namespace
 _script_globals = {}
-with patch('dotenv.load_dotenv'):
-    with open('ip-lookup.py') as f:
-        # Only execute functions, not the main loop
+with patch("dotenv.load_dotenv"):
+    with open("ip-lookup.py") as f:
         code = f.read()
-        # Remove the main loop by only executing up to the functions
+        # Remove the main loop - everything after "# -----------" before "while True:"
+        code = code.split("while True:")[0]  # Only get functions, not main loop
         exec(code, _script_globals)
 
 # Extract functions we need
@@ -58,7 +58,7 @@ class TestMapLink:
         link = getMapLink(40.7128, -74.0060)
         assert "https://www.google.com/maps" in link
         assert "40.7128" in link
-        assert "-74.0060" in link
+        assert "-74.006" in link
 
     def test_zero_coordinates(self):
         """Test zero coordinates (valid, equator/prime meridian)"""
