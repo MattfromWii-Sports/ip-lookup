@@ -25,9 +25,13 @@ getMapLink = _script_globals['getMapLink']
 getIpApi = _script_globals['getIpApi']
 checkAbuseIpDb = _script_globals['checkAbuseIpDb']
 checkLatency = _script_globals['checkLatency']
-output = _script_globals['output']
+outputIP = _script_globals['outputIP']
 checkOpenPortsAndVulns = _script_globals['checkOpenPortsAndVulns']
 parsePorts = _script_globals['parsePorts']
+getDomainInfo = _script_globals['getDomainInfo']
+checkAbuseDomain = _script_globals['checkAbuseDomain']
+isValidDomain = _script_globals['isValidDomain']
+outputDomain = _script_globals['outputDomain']
 
 
 class TestValidateIP:
@@ -267,12 +271,188 @@ class TestOutput:
         }
         port_data = {"ports": [53, 443], "vulns": [], "hostnames": ["dns.google"]}
 
-        output(ip_data, abuse_data, "Reachable (Avg Latency: 15ms)", port_data, [443, 22])
+        outputIP(ip_data, abuse_data, "Reachable (Avg Latency: 15ms)", port_data, [443, 22])
         captured = capsys.readouterr().out
 
         assert "SAFE (Reported, but 0% Abuse Confidence)" in captured
         assert "Port 443: OPEN" in captured
         assert "Port 22: CLOSED / NOT INDEXED" in captured
+
+
+class TestValidateDomain:
+    """Test domain validation function"""
+
+    def test_valid_domain(self):
+        """Test valid domain"""
+        assert isValidDomain("google.com")
+        assert isValidDomain("example.co.uk")
+        assert isValidDomain("sub.example.com")
+
+    def test_invalid_domain(self):
+        """Test invalid domain"""
+        assert not isValidDomain("invalid domain")
+        assert not isValidDomain(".com")
+        assert not isValidDomain("")
+        assert not isValidDomain("invalid_domain")
+        assert not isValidDomain("http://google.com")
+
+    def test_domain_with_special_chars(self):
+        """Test domain with special characters"""
+        assert not isValidDomain("domain@example.com")
+        assert not isValidDomain("domain#.com")
+
+
+class TestGetDomainInfo:
+    """Test domain WHOIS information lookup"""
+
+    @patch('whois.whois')
+    def test_get_domain_info_success(self, mock_whois):
+        """Test successful domain WHOIS lookup"""
+        mock_whois.return_value = {
+            "domain_name": "GOOGLE.COM",
+            "registrar": "MarkMonitor Inc.",
+            "creation_date": "1997-09-15",
+            "expiration_date": "2028-09-14",
+            "name_servers": ["ns1.google.com", "ns2.google.com"],
+            "status": ["active"]
+        }
+
+        result = getDomainInfo("google.com")
+        assert result is not None
+        assert result["domain_name"] == "GOOGLE.COM"
+        assert result["registrar"] == "MarkMonitor Inc."
+
+    @patch('whois.whois')
+    def test_get_domain_info_empty_domain(self, mock_whois):
+        """Test with empty domain"""
+        result = getDomainInfo("")
+        assert result is None
+
+    @patch('whois.whois')
+    def test_get_domain_info_error(self, mock_whois):
+        """Test domain lookup error"""
+        mock_whois.side_effect = Exception("WHOIS lookup failed")
+
+        result = getDomainInfo("nonexistent-domain-12345.com")
+        assert result is None
+
+
+class TestCheckAbuseDomain:
+    """Test domain abuse checking via VirusTotal"""
+
+    def setup_method(self):
+        """Setup for each test - save original API key"""
+        self.original_key = _script_globals.get('VIRUSTOTAL_API_KEY')
+        _script_globals['VIRUSTOTAL_API_KEY'] = "test-key"
+
+    def teardown_method(self):
+        """Cleanup after each test - restore original API key"""
+        if self.original_key is not None:
+            _script_globals['VIRUSTOTAL_API_KEY'] = self.original_key
+        else:
+            _script_globals.pop('VIRUSTOTAL_API_KEY', None)
+
+    @patch('requests.get')
+    def test_check_clean_domain(self, mock_get):
+        """Test checking a clean domain"""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "data": {
+                "attributes": {
+                    "last_analysis_date": 1700000000,
+                    "last_analysis_stats": {
+                        "malicious": 0,
+                        "suspicious": 0,
+                        "undetected": 50,
+                        "harmless": 20,
+                        "timeout": 0
+                    }
+                }
+            }
+        }
+        mock_get.return_value = mock_response
+
+        result = checkAbuseDomain("google.com")
+        assert result is not None
+        assert result["query_status"] == "success"
+        assert result["malicious"] == 0
+        assert result["suspicious"] == 0
+        assert result["harmless"] == 20
+        assert "virustotal.com" in result["link"]
+
+    @patch('requests.get')
+    def test_check_malicious_domain(self, mock_get):
+        """Test checking a malicious domain"""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "data": {
+                "attributes": {
+                    "last_analysis_date": 1700000000,
+                    "last_analysis_stats": {
+                        "malicious": 15,
+                        "suspicious": 5,
+                        "undetected": 30,
+                        "harmless": 20,
+                        "timeout": 0
+                    }
+                }
+            }
+        }
+        mock_get.return_value = mock_response
+
+        result = checkAbuseDomain("malicious-domain.com")
+        assert result is not None
+        assert result["malicious"] == 15
+        assert result["suspicious"] == 5
+
+    @patch('requests.get')
+    def test_check_domain_not_found(self, mock_get):
+        """Test domain not found in VirusTotal"""
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        mock_get.return_value = mock_response
+
+        result = checkAbuseDomain("nonexistent-domain-12345.com")
+        assert result is not None
+        assert result["query_status"] == "not_found"
+
+    def test_missing_api_key(self):
+        """Test with missing API key"""
+        # Temporarily clear the API key
+        original_key = _script_globals.get('VIRUSTOTAL_API_KEY')
+        _script_globals['VIRUSTOTAL_API_KEY'] = ""
+        try:
+            result = checkAbuseDomain("google.com")
+            assert result is None
+        finally:
+            if original_key is not None:
+                _script_globals['VIRUSTOTAL_API_KEY'] = original_key
+
+    @patch('requests.get')
+    def test_invalid_api_key(self, mock_get):
+        """Test with invalid API key"""
+        mock_response = MagicMock()
+        mock_response.status_code = 401
+        mock_get.return_value = mock_response
+
+        result = checkAbuseDomain("google.com")
+        assert result is None
+
+    @patch('requests.get')
+    def test_api_error(self, mock_get):
+        """Test API connection error"""
+        mock_get.side_effect = Exception("Connection error")
+
+        result = checkAbuseDomain("google.com")
+        assert result is None
+
+    def test_empty_domain(self):
+        """Test with empty domain"""
+        result = checkAbuseDomain("")
+        assert result is None
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
