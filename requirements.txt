@@ -1,5 +1,6 @@
 requests
 python-dotenv
+python-whois
 
 # Development & Testing
 pytest>=7.0.0

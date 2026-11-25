@@ -1,9 +1,11 @@
 import ipaddress
 import os
 import re
+import socket
 import subprocess
 
 import requests
+import whois
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -21,8 +23,12 @@ abuseIpDbUrl = "https://api.abuseipdb.com/api/v2/check"
 # For open port and CVE vulnerability lookup (Passive)
 shodanInternetDbUrl = "https://internetdb.shodan.io/"
 
-# Get API key from .env
+# For checking domain names on VirusTotal
+virusTotalUrl = "https://www.virustotal.com/api/v3/domains/"
+
+# Get API keys from .env
 ABUSEIPDB_API_KEY = os.getenv("ABUSEIPDB_API_KEY")
+VIRUSTOTAL_API_KEY = os.getenv("VIRUSTOTAL_API_KEY")
 
 # ------------
 # Functions
@@ -42,6 +48,81 @@ def getIpApi(ip=""):
 
     except Exception as e:
         print(f"An error occurred: {e}")
+        return None
+
+# Function to get domain name information using python whois package
+def getDomainInfo(domain):
+    if not domain:
+        return None
+
+    try:
+        # Query WHOIS information for the domain
+        domain_info = whois.whois(domain)
+        
+        return domain_info
+    except Exception as e:
+        print(f"An error occurred looking up domain {domain}: {e}")
+        return None
+
+# Function to check if domain is reported on VirusTotal
+def checkAbuseDomain(domain):
+    if not domain:
+        return None
+
+    if not VIRUSTOTAL_API_KEY:
+        print("VirusTotal Error: Missing or invalid API Key.")
+        return None
+
+    # Setup API Key header
+    headers = {
+        "x-apikey": VIRUSTOTAL_API_KEY
+    }
+
+    try:
+        # Query VirusTotal 
+        response = requests.get(f"{virusTotalUrl}{domain}", headers=headers, timeout=5)
+
+        # Upon successful response
+        if response.status_code == 200:
+            data = response.json().get("data", {})
+            attributes = data.get("attributes", {})
+            last_analysis_stats = attributes.get("last_analysis_stats", {})
+            
+            # Generate virus total link
+            link = f"https://www.virustotal.com/gui/domain/{domain}"
+
+            return {
+                "domain": domain,
+                "last_analysis_date": attributes.get("last_analysis_date"),
+                "malicious": last_analysis_stats.get("malicious", 0),
+                "suspicious": last_analysis_stats.get("suspicious", 0),
+                "undetected": last_analysis_stats.get("undetected", 0),
+                "harmless": last_analysis_stats.get("harmless", 0),
+                "timeout": last_analysis_stats.get("timeout", 0),
+                "link": link,
+                "query_status": "success"
+            }
+
+        # Upon failure (Incorrect API Key or domain not found)
+        elif response.status_code == 401:
+            print("VirusTotal Error: Invalid or missing API Key.")
+            return None
+
+        elif response.status_code == 404:
+            print(f"VirusTotal: Domain {domain} not found in database.")
+            return {
+                "domain": domain,
+                "query_status": "not_found"
+            }
+
+        # Failback (other errors)
+        else:
+            print(f"VirusTotal Error: HTTP {response.status_code}")
+            return None
+
+    # Could not reach VirusTotal API
+    except Exception as e:
+        print(f"An error occurred querying VirusTotal: {e}")
         return None
 
 # Function to check if IP is reported on AbuseIPDB
@@ -128,6 +209,19 @@ def isValidIp(ip):
     except ValueError:
         return False
 
+# Function to check if input is a valid domain
+def isValidDomain(domain):
+    if not domain or len(domain) < 3:
+        return False
+    
+    # Check if it contains a dot and valid characters
+    if "." in domain:
+        # Simple regex for domain validation
+        domain_pattern = r'^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$'
+        return re.match(domain_pattern, domain.lower()) is not None
+    
+    return False
+
 # Function to check if the target IP is reachable and measure latency (ping)
 def checkLatency(ip):
     if not ip:
@@ -162,8 +256,85 @@ def getMapLink(lat, lon):
         return f"https://www.google.com/maps?q={lat},{lon}"
     return "Map link unavailable"
 
+# Function to output domain lookup results
+def outputDomain(domainResult, abuseResult=None):
+    # Helper function to format dates
+    def format_date(date_obj):
+        if date_obj is None:
+            return 'N/A'
+        if isinstance(date_obj, list):
+            # If it's a list of dates, format the first one
+            if date_obj:
+                date_obj = date_obj[0]
+            else:
+                return 'N/A'
+        # Check if it's a datetime object
+        if hasattr(date_obj, 'strftime'):
+            return date_obj.strftime('%Y-%m-%d %H:%M:%S %Z')
+        return str(date_obj)
+    
+    print("----------------------------------------")
+    
+    if domainResult:
+        print(f"Domain: {domainResult.get('domain_name', 'N/A')}")
+        print(f"Registrar: {domainResult.get('registrar', 'N/A')}")
+        print(f"Registrar URL: {domainResult.get('registrar_url', 'N/A')}")
+        print(f"Reseller: {domainResult.get('reseller', 'N/A')}")
+        print(f"WHOIS Server: {domainResult.get('whois_server', 'N/A')}")
+        print(f"Creation Date: {format_date(domainResult.get('creation_date'))}")
+        print(f"Expiration Date: {format_date(domainResult.get('expiration_date'))}")
+        print(f"Updated Date: {format_date(domainResult.get('updated_date'))}")
+    
+        
+        name_servers = domainResult.get('name_servers', [])
+        print(f"Name Servers: {', '.join(name_servers) if name_servers else 'N/A'}")
+        print(f"DNSSEC: {domainResult.get('dnssec', 'N/A')}")
+        
+        # Registrant Information
+        print("----------------------------------------")
+        print(f"Name: {domainResult.get('name', 'N/A')}")
+        print(f"Organization: {domainResult.get('org', 'N/A')}")
+        print(f"Address: {domainResult.get('address', 'N/A')}")
+        print(f"City: {domainResult.get('city', 'N/A')}")
+        print(f"State: {domainResult.get('state', 'N/A')}")
+        print(f"Postal Code: {domainResult.get('registrant_postal_code', 'N/A')}")
+        print(f"Country: {domainResult.get('country', 'N/A')}")
+        
+    else:
+        print("Could not retrieve domain WHOIS data.")
+
+    # VirusTotal Report Result
+    print("----------------------------------------")
+    if abuseResult:
+        if abuseResult.get("query_status") == "not_found":
+            print(f"Domain not found in VirusTotal database.")
+        else:
+            last_analysis_stats = abuseResult.get("last_analysis_stats", {})
+            malicious = last_analysis_stats.get("malicious", 0)
+            suspicious = last_analysis_stats.get("suspicious", 0)
+            undetected = last_analysis_stats.get("undetected", 0)
+            harmless = last_analysis_stats.get("harmless", 0)
+            
+            # Determine status based on count
+            if malicious > 0:
+                status = "FLAGGED / MALICIOUS"
+            elif suspicious > 0:
+                status = "SUSPICIOUS"
+            else:
+                status = "CLEAN"
+            
+            print(f"VirusTotal Status: {status}")
+            print(f"Malicious: {malicious}")
+            print(f"Suspicious: {suspicious}")
+            print(f"Undetected: {undetected}")
+            print(f"Harmless: {harmless}")
+            print(f"VirusTotal Link: {abuseResult.get('link', 'N/A')}")
+    else:
+        print("VirusTotal data unavailable.")
+    print("----------------------------------------")
+
 # Function to output the results
-def output(ipresult, abuseresult=None, latencyresult=None, portresult=None, target_ports=None):
+def outputIP(ipresult, abuseresult=None, latencyresult=None, portresult=None, target_ports=None):
     print("----------------------------------------")
 
     # Ensures that we are able to get an IP from the lookup
@@ -249,37 +420,47 @@ def output(ipresult, abuseresult=None, latencyresult=None, portresult=None, targ
 # Main loop
 # ------------
 while True:
-    ip = input("Input an IP address [your IP]: ")
-    if ip == "q" or ip == "quit":
+    user_input = input("Input an IP address or domain name [your IP]: ")
+    if user_input == "q" or user_input == "quit":
         break
 
-    # First check the validity of the ip address
-    ipValid = isValidIp(ip)
-    if not ipValid:
-        print("Invalid IP, please try again.")
+    # Check if input is a domain or IP
+    is_domain = isValidDomain(user_input)
+    is_ip = isValidIp(user_input)
+
+    if not is_domain and not is_ip:
+        print("Invalid IP or domain name, please try again.")
         continue
 
-    # Determine if the user chose his own IP or a custom IP
-    ipResult = ""
-    if ip == "":
-        ipResult = getIpApi()
+    # Handle domain input
+    if is_domain:
+        print("Looking up domain...")
+        domainResult = getDomainInfo(user_input)
+        abuseResult = checkAbuseDomain(user_input)
+        outputDomain(domainResult, abuseResult)
+
+    # Handle IP input
     else:
-        ipResult = getIpApi(ip)
+        # Determine if the user chose his own IP or a custom IP
+        if user_input == "":
+            ipResult = getIpApi()
+        else:
+            ipResult = getIpApi(user_input)
 
-    # Optional port input 
-    port_input = input("Specific ports to check (comma-separated) [Enter for all]: ").strip()
-    target_ports = parsePorts(port_input)
+        # Optional port input 
+        port_input = input("Specific ports to check (comma-separated) [Enter for all]: ").strip()
+        target_ports = parsePorts(port_input)
 
-    ipResult = getIpApi() if ip == "" else getIpApi(ip)
+        # Extract the resolved IP address
+        resolvedIp = ipResult.get("query") if ipResult else user_input
 
-   # Extract the resolved IP address
-    resolvedIp = ipResult.get("query") if ipResult else ip
+        print("Looking up IP address...")
 
-    # Query AbuseIPDB using the resolved IP address, and Ports/CVE
-    abuseResult = checkAbuseIpDb(resolvedIp)
-    latencyResult = checkLatency(resolvedIp)
-    portResult = checkOpenPortsAndVulns(resolvedIp)
+        # Query AbuseIPDB using the resolved IP address, and Ports/CVE
+        abuseResult = checkAbuseIpDb(resolvedIp)
+        latencyResult = checkLatency(resolvedIp)
+        portResult = checkOpenPortsAndVulns(resolvedIp)
 
-    # Display the output
-    output(ipResult, abuseResult, latencyResult, portResult, target_ports)
+        # Display the output
+        outputIP(ipResult, abuseResult, latencyResult, portResult, target_ports)
 
