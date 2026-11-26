@@ -7,9 +7,6 @@ on:
   pull_request:
     branches: [ main ]
 
-permissions:
-  contents: write
-
 jobs:
   # 1. Test Python syntax and formatting
   # Uses Ruff as the linter and code formatter
@@ -19,10 +16,10 @@ jobs:
     name: Lint & Format Check
     
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       
@@ -45,10 +42,10 @@ jobs:
       ABUSEIPDB_API_KEY: ${{ secrets.ABUSEIPDB_API_KEY }}
     
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       
@@ -78,10 +75,10 @@ jobs:
       ABUSEIPDB_API_KEY: ${{ secrets.ABUSEIPDB_API_KEY }}
     
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       
@@ -106,10 +103,10 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
       
@@ -127,7 +124,7 @@ jobs:
           echo "ABUSEIPDB_API_KEY=" > dist/.env
       
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           files: dist/*
           draft: false
