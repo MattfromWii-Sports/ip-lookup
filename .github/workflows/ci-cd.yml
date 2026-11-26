@@ -124,10 +124,16 @@ jobs:
           echo 'ABUSEIPDB_API_KEY=""' > dist/.env
           echo 'VIRUSTOTAL_API_KEY=""' >> dist/.env
       
+      - name: Create zip archive
+        run: |
+          cd dist
+          zip -r ip-lookup-release.zip ip-lookup.py requirements.txt README.md .env
+          cd ..
+      
       - name: Create Release
         uses: softprops/action-gh-release@v3
         with:
-          files: dist/*
+          files: dist/ip-lookup-release.zip
           draft: false
           prerelease: false
         env:
