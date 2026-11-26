@@ -121,7 +121,8 @@ jobs:
           cp ip-lookup.py dist/
           cp requirements.txt dist/
           cp README.md dist/
-          echo "ABUSEIPDB_API_KEY=" > dist/.env
+          echo 'ABUSEIPDB_API_KEY=""' > dist/.env
+          echo 'VIRUSTOTAL_API_KEY=""' >> dist/.env
       
       - name: Create Release
         uses: softprops/action-gh-release@v3
