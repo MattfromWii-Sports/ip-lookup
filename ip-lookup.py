@@ -3,6 +3,10 @@ import os
 import re
 import socket
 import subprocess
+from datetime import datetime
+
+import shutil
+from pathlib import Path
 
 import requests
 import whois
@@ -272,7 +276,7 @@ def outputDomain(domainResult, abuseResult=None):
         if hasattr(date_obj, 'strftime'):
             return date_obj.strftime('%Y-%m-%d %H:%M:%S %Z')
         return str(date_obj)
-    
+
     print("----------------------------------------")
     
     if domainResult:
@@ -414,13 +418,188 @@ def outputIP(ipresult, abuseresult=None, latencyresult=None, portresult=None, ta
         print("AbuseIPDB data unavailable.")
     print("----------------------------------------")
 
+# Download Domain Function
+def downloadDomain(domainResult, abuseResult=None, filename=None):
+    # Helper function to format dates
+    def format_date(date_obj):
+        if date_obj is None:
+            return 'N/A'
+        if isinstance(date_obj, list):
+            # If it's a list of dates, format the first one
+            if date_obj:
+                date_obj = date_obj[0]
+            else:
+                return 'N/A'
+        # Check if it's a datetime object
+        if hasattr(date_obj, 'strftime'):
+            return date_obj.strftime('%Y-%m-%d %H:%M:%S %Z')
+        return str(date_obj)
 
+    with open(filename, "w", encoding="utf-8") as file:
+        file.write("----------------------------------------\n")
+    
+    if domainResult:
+        with open(filename, "a", encoding="utf-8") as file:
+            file.write(f"Domain: {domainResult.get('domain_name', 'N/A')}\n")
+            file.write(f"Registrar: {domainResult.get('registrar', 'N/A')}\n")
+            file.write(f"Registrar URL: {domainResult.get('registrar_url', 'N/A')}\n")
+            file.write(f"Reseller: {domainResult.get('reseller', 'N/A')}\n")
+            file.write(f"WHOIS Server: {domainResult.get('whois_server', 'N/A')}\n")
+            file.write(f"Creation Date: {format_date(domainResult.get('creation_date'))}\n")
+            file.write(f"Expiration Date: {format_date(domainResult.get('expiration_date'))}\n")
+            file.write(f"Updated Date: {format_date(domainResult.get('updated_date'))}\n")
+    
+        
+        name_servers = domainResult.get('name_servers', [])
+        with open(filename, "a", encoding="utf-8") as file:
+            file.write(f"Name Servers: {', '.join(name_servers) if name_servers else 'N/A'}\n")
+            file.write(f"DNSSEC: {domainResult.get('dnssec', 'N/A')}\n")
+        
+            # Registrant Information
+            file.write("----------------------------------------\n")
+            file.write(f"Name: {domainResult.get('name', 'N/A')}\n")
+            file.write(f"Organization: {domainResult.get('org', 'N/A')}\n")
+            file.write(f"Address: {domainResult.get('address', 'N/A')}\n")
+            file.write(f"City: {domainResult.get('city', 'N/A')}\n")
+            file.write(f"State: {domainResult.get('state', 'N/A')}\n")
+            file.write(f"Postal Code: {domainResult.get('registrant_postal_code', 'N/A')}\n")
+            file.write(f"Country: {domainResult.get('country', 'N/A')}\n")
+        
+    else:
+        with open(filename, "a", encoding="utf-8") as file:
+            file.write("Could not retrieve domain WHOIS data.\n")
+
+    # VirusTotal Report Result
+    print("----------------------------------------")
+    if abuseResult:
+        if abuseResult.get("query_status") == "not_found":
+            with open(filename, "a", encoding="utf-8") as file:
+                file.write(f"Domain not found in VirusTotal database.\n")
+        else:
+            last_analysis_stats = abuseResult.get("last_analysis_stats", {})
+            malicious = last_analysis_stats.get("malicious", 0)
+            suspicious = last_analysis_stats.get("suspicious", 0)
+            undetected = last_analysis_stats.get("undetected", 0)
+            harmless = last_analysis_stats.get("harmless", 0)
+            
+            # Determine status based on count
+            if malicious > 0:
+                status = "FLAGGED / MALICIOUS"
+            elif suspicious > 0:
+                status = "SUSPICIOUS"
+            else:
+                status = "CLEAN"
+
+            with open(filename, "a", encoding="utf-8") as file:
+                file.write(f"VirusTotal Status: {status}\n")
+                file.write(f"Malicious: {malicious}\n")
+                file.write(f"Suspicious: {suspicious}\n")
+                file.write(f"Undetected: {undetected}\n")
+                file.write(f"Harmless: {harmless}\n")
+                file.write(f"VirusTotal Link: {abuseResult.get('link', 'N/A')}\n")
+    else:
+        with open(filename, "a", encoding="utf-8") as file:
+            file.write("VirusTotal data unavailable.\n")
+    with open(filename, "a", encoding="utf-8") as file:
+        file.write("----------------------------------------")
+
+
+# Download IPv4 Function
+def downloadIP(ipresult, abuseresult=None, latencyresult=None, portresult=None, target_ports=None, filename=None):
+    with open(filename, "w", encoding="utf-8") as file:
+        file.write("----------------------------------------\n")
+
+    # Ensures that we are able to get an IP from the lookup
+    if ipresult and ipresult.get("status") == "success":
+        target_ip = ipresult.get("query")
+
+        # Check if the address is IPv4 or IPv6
+        ip_version = f"IPv{ipaddress.ip_address(target_ip).version}" if target_ip else "Unknown"
+
+        # Grab coordinates and generate the Google Maps URL
+        lat = ipresult.get("lat")
+        lon = ipresult.get("lon")
+        map_link = getMapLink(lat, lon)
+
+        # Write output to a downloadable file
+        with open(filename, "a", encoding="utf-8") as file:
+            file.write(f"IP Address: {ipresult.get('query')} ({ip_version})\n")
+            file.write(f"Country: {ipresult.get('country')}\n")
+            file.write(f"Region: {ipresult.get('regionName')}\n")
+            file.write(f"City: {ipresult.get('city')}\n")
+            file.write(f"Coordinates: (Latitude) {ipresult.get('lat')}, (Longitude) {ipresult.get('lon')}\n")
+            file.write(f"Map Link:    {map_link}\n")
+            file.write(f"ISP: {ipresult.get('isp')}\n")
+            file.write(f"ASN:          {ipresult.get('as')}\n")
+            file.write(f"Reachability: {latencyresult}\n")
+    else:
+        with open(filename, "a", encoding="utf-8") as file:
+            file.write("Could not retrieve IP geolocation data.\n")
+
+    # Open Ports & Vulnerability Result
+    with open(filename, "a", encoding="utf-8") as file:
+        file.write("----------------------------------------\n")
+    if portresult is not None:
+        open_ports = portresult.get("ports", [])
+        vulns = portresult.get("vulns", [])
+        hostnames = portresult.get("hostnames", [])
+
+        with open(filename, "a", encoding="utf-8") as file:
+            file.write(f"Hostnames:         {', '.join(hostnames) if hostnames else 'None'}\n")
+            file.write(f"All Open Ports:    {', '.join(map(str, open_ports)) if open_ports else 'None detected'}\n")
+
+            # Check specific ports if the user typed any
+            if target_ports:
+                file.write("Requested Ports Check:\n")
+                for p in target_ports:
+                    state = "OPEN" if p in open_ports else "CLOSED / NOT INDEXED"
+                    file.write(f"  - Port {p}: {state}\n")
+
+            file.write(f"Known CVEs:        {', '.join(vulns) if vulns else 'None detected'}\n")
+    else:
+        with open(filename, "a", encoding="utf-8") as file:
+            file.write("Port & vulnerability data unavailable.\n")
+
+    # AbuseIPDB Report Result
+    with open(filename, "a", encoding="utf-8") as file:
+        file.write("----------------------------------------\n")
+    if abuseresult:
+
+        # Extract report data from the AbuseIPDB response
+        total_reports = abuseresult.get("totalReports", 0)
+        confidence_score = abuseresult.get("abuseConfidenceScore", 0)
+        last_reported = abuseresult.get("lastReportedAt") or "Never"
+        usage_type = abuseresult.get("usageType") or "Unknown"
+        is_whitelisted = abuseresult.get("isWhitelisted")
+
+        # Decide if the IP is actually risky based on the confidence score
+        if confidence_score >= 25:
+            status = "REPORTED / SUSPICIOUS"
+        elif total_reports > 0:
+            status = "SAFE (Reported, but 0% Abuse Confidence)"
+        else:
+            status = "CLEAN (No Reports)"
+
+        # Display the security report summary
+        with open(filename, "a", encoding="utf-8") as file:
+            file.write(f"Status:            {status}\n")
+            file.write(f"Total Reports:     {total_reports} (in last 90 days)\n")
+            file.write(f"Abuse Confidence:  {confidence_score}%\n")
+            file.write(f"Usage Type:        {usage_type}\n")
+            file.write(f"Whitelisted:       {is_whitelisted}\n")
+            file.write(f"Last Reported At:  {last_reported}\n")
+            file.write(f"Web Report Link:   https://www.abuseipdb.com/check/{abuseresult.get('ipAddress')}\n")
+    else:
+        with open(filename, "a", encoding="utf-8") as file:
+            file.write("AbuseIPDB data unavailable.\n")
+    with open(filename, "a", encoding="utf-8") as file:
+        file.write("----------------------------------------")
 
 # ------------
 # Main loop
 # ------------
 while True:
-    user_input = input("Input an IP address or domain name [your IP]: ")
+    user_input = input("Input an IP address or domain name [your IP] [enter q to quit]: ")
     if user_input == "q" or user_input == "quit":
         break
 
@@ -438,6 +617,19 @@ while True:
         domainResult = getDomainInfo(user_input)
         abuseResult = checkAbuseDomain(user_input)
         outputDomain(domainResult, abuseResult)
+        # Download Functionality
+        user_input = input("Do you want to download the result? [y or n] ")
+        
+        if user_input == "y" or user_input == "yes":
+            file = f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_domain.txt"
+            downloadDomain(domainResult, abuseResult, file)
+            # Move file to downloads folder
+            source_file = Path(file)
+            downloads_folder = Path.home() / "Downloads"
+            shutil.move(str(source_file), str(downloads_folder / source_file.name))
+            print("Downloading file ...........")
+            print("The output has been downloaded! You can view it in your downloads folder")
+            print(f"The file name is {file}")
 
     # Handle IP input
     else:
@@ -463,4 +655,18 @@ while True:
 
         # Display the output
         outputIP(ipResult, abuseResult, latencyResult, portResult, target_ports)
+
+        # Download Functionality
+        user_input = input("Do you want to download the result? [y or n] ")
+
+        if user_input == "y" or user_input == "yes":
+            file = f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_ip.txt"
+            downloadIP(ipResult, abuseResult, latencyResult, portResult, target_ports, file)
+            # Move file to downloads folder
+            source_file = Path(file)
+            downloads_folder = Path.home() / "Downloads"
+            shutil.move(str(source_file), str(downloads_folder / source_file.name))
+            print("Downloading file ...........")
+            print("The output has been downloaded! You can view it in your downloads folder")
+            print(f"The file name is {file}")
 

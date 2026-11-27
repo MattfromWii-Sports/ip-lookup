@@ -32,7 +32,8 @@ getDomainInfo = _script_globals['getDomainInfo']
 checkAbuseDomain = _script_globals['checkAbuseDomain']
 isValidDomain = _script_globals['isValidDomain']
 outputDomain = _script_globals['outputDomain']
-
+downloadDomain = _script_globals['downloadDomain']
+downloadIP = _script_globals['downloadIP']
 
 class TestValidateIP:
     """Test IP validation function"""
@@ -453,6 +454,101 @@ class TestCheckAbuseDomain:
         result = checkAbuseDomain("")
         assert result is None
 
+class TestDownloadResults:
+    """Test downloading domain and IP diagnostic reports to TXT files"""
+
+    def test_download_domain_success(self, tmp_path):
+        """Test downloading valid domain WHOIS and VirusTotal results"""
+        filepath = tmp_path / "test_domain.txt"
+        domain_data = {
+            "domain_name": "GOOGLE.COM",
+            "registrar": "MarkMonitor Inc.",
+            "creation_date": "1997-09-15",
+            "name_servers": ["ns1.google.com", "ns2.google.com"],
+            "org": "Google LLC",
+            "country": "US",
+        }
+        abuse_data = {
+            "query_status": "success",
+            "last_analysis_stats": {
+                "malicious": 0,
+                "suspicious": 0,
+                "undetected": 50,
+                "harmless": 20,
+            },
+            "link": "https://www.virustotal.com/gui/domain/google.com",
+        }
+
+        downloadDomain(domain_data, abuse_data, filename=str(filepath))
+
+        assert filepath.exists()
+        content = filepath.read_text(encoding="utf-8")
+        assert "Domain: GOOGLE.COM" in content
+        assert "Registrar: MarkMonitor Inc." in content
+        assert "VirusTotal Status: CLEAN" in content
+
+    def test_download_domain_unavailable(self, tmp_path):
+        """Test downloading domain report when WHOIS and VirusTotal data are None"""
+        filepath = tmp_path / "test_domain_empty.txt"
+
+        downloadDomain(None, None, filename=str(filepath))
+
+        assert filepath.exists()
+        content = filepath.read_text(encoding="utf-8")
+        assert "Could not retrieve domain WHOIS data." in content
+        assert "VirusTotal data unavailable." in content
+
+    def test_download_ip_success(self, tmp_path):
+        """Test downloading valid IP geolocation, open ports, and AbuseIPDB results"""
+        filepath = tmp_path / "test_ip.txt"
+        ip_data = {
+            "status": "success",
+            "query": "8.8.8.8",
+            "country": "United States",
+            "regionName": "Virginia",
+            "city": "Ashburn",
+            "lat": 39.03,
+            "lon": -77.5,
+            "isp": "Google LLC",
+            "as": "AS15169 Google LLC",
+        }
+        abuse_data = {
+            "totalReports": 10,
+            "abuseConfidenceScore": 0,
+            "lastReportedAt": "2026-11-10T06:26:48+00:00",
+            "usageType": "Content Delivery Network",
+            "isWhitelisted": True,
+            "ipAddress": "8.8.8.8",
+        }
+        port_data = {"ports": [53, 443], "vulns": [], "hostnames": ["dns.google"]}
+
+        downloadIP(
+            ip_data,
+            abuse_data,
+            "Reachable (Avg Latency: 15ms)",
+            port_data,
+            [443, 22],
+            filename=str(filepath),
+        )
+
+        assert filepath.exists()
+        content = filepath.read_text(encoding="utf-8")
+        assert "IP Address: 8.8.8.8 (IPv4)" in content
+        assert "Port 443: OPEN" in content
+        assert "Port 22: CLOSED / NOT INDEXED" in content
+        assert "SAFE (Reported, but 0% Abuse Confidence)" in content
+
+    def test_download_ip_unavailable(self, tmp_path):
+        """Test downloading IP report when lookup data is None"""
+        filepath = tmp_path / "test_ip_empty.txt"
+
+        downloadIP(None, None, None, None, None, filename=str(filepath))
+
+        assert filepath.exists()
+        content = filepath.read_text(encoding="utf-8")
+        assert "Could not retrieve IP geolocation data." in content
+        assert "Port & vulnerability data unavailable." in content
+        assert "AbuseIPDB data unavailable." in content
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
