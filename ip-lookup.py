@@ -3,6 +3,7 @@ import os
 import re
 import socket
 import subprocess
+from datetime import datetime
 
 import shutil
 from pathlib import Path
@@ -620,7 +621,7 @@ while True:
         user_input = input("Do you want to download the result? [y or n] ")
         
         if user_input == "y" or user_input == "yes":
-            file = "resultDomain.txt"
+            file = f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_domain.txt"
             downloadDomain(domainResult, abuseResult, file)
             # Move file to downloads folder
             source_file = Path(file)
@@ -659,7 +660,7 @@ while True:
         user_input = input("Do you want to download the result? [y or n] ")
 
         if user_input == "y" or user_input == "yes":
-            file = "resultIP.txt"
+            file = f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_ip.txt"
             downloadIP(ipResult, abuseResult, latencyResult, portResult, target_ports, file)
             # Move file to downloads folder
             source_file = Path(file)
