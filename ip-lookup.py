@@ -4,6 +4,9 @@ import re
 import socket
 import subprocess
 
+import shutil
+from pathlib import Path
+
 import requests
 import whois
 from dotenv import load_dotenv
@@ -414,13 +417,102 @@ def outputIP(ipresult, abuseresult=None, latencyresult=None, portresult=None, ta
         print("AbuseIPDB data unavailable.")
     print("----------------------------------------")
 
+# Download Function
+def downloadIP(ipresult, abuseresult=None, latencyresult=None, portresult=None, target_ports=None, filename=None):
+    with open(filename, "w", encoding="utf-8") as file:
+        file.write("----------------------------------------\n")
 
+    # Ensures that we are able to get an IP from the lookup
+    if ipresult and ipresult.get("status") == "success":
+        target_ip = ipresult.get("query")
+
+        # Check if the address is IPv4 or IPv6
+        ip_version = f"IPv{ipaddress.ip_address(target_ip).version}" if target_ip else "Unknown"
+
+        # Grab coordinates and generate the Google Maps URL
+        lat = ipresult.get("lat")
+        lon = ipresult.get("lon")
+        map_link = getMapLink(lat, lon)
+
+        # Write output to a downloadable file
+        with open(filename, "a", encoding="utf-8") as file:
+            file.write(f"IP Address: {ipresult.get('query')} ({ip_version})\n")
+            file.write(f"Country: {ipresult.get('country')}\n")
+            file.write(f"Region: {ipresult.get('regionName')}\n")
+            file.write(f"City: {ipresult.get('city')}\n")
+            file.write(f"Coordinates: (Latitude) {ipresult.get('lat')}, (Longitude) {ipresult.get('lon')}\n")
+            file.write(f"Map Link:    {map_link}\n")
+            file.write(f"ISP: {ipresult.get('isp')}\n")
+            file.write(f"ASN:          {ipresult.get('as')}\n")
+            file.write(f"Reachability: {latencyresult}\n")
+    else:
+        with open(filename, "a", encoding="utf-8") as file:
+            file.write("Could not retrieve IP geolocation data.\n")
+
+    # Open Ports & Vulnerability Result
+    with open(filename, "a", encoding="utf-8") as file:
+        file.write("----------------------------------------\n")
+    if portresult is not None:
+        open_ports = portresult.get("ports", [])
+        vulns = portresult.get("vulns", [])
+        hostnames = portresult.get("hostnames", [])
+
+        with open(filename, "a", encoding="utf-8") as file:
+            file.write(f"Hostnames:         {', '.join(hostnames) if hostnames else 'None'}\n")
+            file.write(f"All Open Ports:    {', '.join(map(str, open_ports)) if open_ports else 'None detected'}\n")
+
+            # Check specific ports if the user typed any
+            if target_ports:
+                file.write("Requested Ports Check:\n")
+                for p in target_ports:
+                    state = "OPEN" if p in open_ports else "CLOSED / NOT INDEXED"
+                    file.write(f"  - Port {p}: {state}\n")
+
+            file.write(f"Known CVEs:        {', '.join(vulns) if vulns else 'None detected'}\n")
+    else:
+        with open(filename, "a", encoding="utf-8") as file:
+            file.write("Port & vulnerability data unavailable.\n")
+
+    # AbuseIPDB Report Result
+    with open(filename, "a", encoding="utf-8") as file:
+        file.write("----------------------------------------\n")
+    if abuseresult:
+
+        # Extract report data from the AbuseIPDB response
+        total_reports = abuseresult.get("totalReports", 0)
+        confidence_score = abuseresult.get("abuseConfidenceScore", 0)
+        last_reported = abuseresult.get("lastReportedAt") or "Never"
+        usage_type = abuseresult.get("usageType") or "Unknown"
+        is_whitelisted = abuseresult.get("isWhitelisted")
+
+        # Decide if the IP is actually risky based on the confidence score
+        if confidence_score >= 25:
+            status = "REPORTED / SUSPICIOUS"
+        elif total_reports > 0:
+            status = "SAFE (Reported, but 0% Abuse Confidence)"
+        else:
+            status = "CLEAN (No Reports)"
+
+        # Display the security report summary
+        with open(filename, "a", encoding="utf-8") as file:
+            file.write(f"Status:            {status}\n")
+            file.write(f"Total Reports:     {total_reports} (in last 90 days)\n")
+            file.write(f"Abuse Confidence:  {confidence_score}%\n")
+            file.write(f"Usage Type:        {usage_type}\n")
+            file.write(f"Whitelisted:       {is_whitelisted}\n")
+            file.write(f"Last Reported At:  {last_reported}\n")
+            file.write(f"Web Report Link:   https://www.abuseipdb.com/check/{abuseresult.get('ipAddress')}\n")
+    else:
+        with open(filename, "a", encoding="utf-8") as file:
+            file.write("AbuseIPDB data unavailable.\n")
+    with open(filename, "a", encoding="utf-8") as file:
+        file.write("----------------------------------------")
 
 # ------------
 # Main loop
 # ------------
 while True:
-    user_input = input("Input an IP address or domain name [your IP]: ")
+    user_input = input("Input an IP address or domain name [your IP] [enter q to quit]: ")
     if user_input == "q" or user_input == "quit":
         break
 
@@ -463,4 +555,18 @@ while True:
 
         # Display the output
         outputIP(ipResult, abuseResult, latencyResult, portResult, target_ports)
+
+        #Download Functionality
+        user_input = input("Do you want to download the result? [y or n] ")
+
+        if user_input == "y" or user_input == "yes":
+            file = "resultIP.txt"
+            downloadIP(ipResult, abuseResult, latencyResult, portResult, target_ports, file)
+            # Move file to downloads folder
+            source_file = Path(file)
+            downloads_folder = Path.home() / "Downloads"
+            shutil.move(str(source_file), str(downloads_folder / source_file.name))
+            print("Downloading file ...........")
+            print("The output has been downloaded! You can view it in your downloads folder")
+            print(f"The file name is {file}")
 
