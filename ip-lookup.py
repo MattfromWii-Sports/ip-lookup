@@ -275,7 +275,7 @@ def outputDomain(domainResult, abuseResult=None):
         if hasattr(date_obj, 'strftime'):
             return date_obj.strftime('%Y-%m-%d %H:%M:%S %Z')
         return str(date_obj)
-    
+
     print("----------------------------------------")
     
     if domainResult:
@@ -417,7 +417,93 @@ def outputIP(ipresult, abuseresult=None, latencyresult=None, portresult=None, ta
         print("AbuseIPDB data unavailable.")
     print("----------------------------------------")
 
-# Download Function
+# Download Domain Function
+def downloadDomain(domainResult, abuseResult=None, filename=None):
+    # Helper function to format dates
+    def format_date(date_obj):
+        if date_obj is None:
+            return 'N/A'
+        if isinstance(date_obj, list):
+            # If it's a list of dates, format the first one
+            if date_obj:
+                date_obj = date_obj[0]
+            else:
+                return 'N/A'
+        # Check if it's a datetime object
+        if hasattr(date_obj, 'strftime'):
+            return date_obj.strftime('%Y-%m-%d %H:%M:%S %Z')
+        return str(date_obj)
+
+    with open(filename, "w", encoding="utf-8") as file:
+        file.write("----------------------------------------\n")
+    
+    if domainResult:
+        with open(filename, "a", encoding="utf-8") as file:
+            file.write(f"Domain: {domainResult.get('domain_name', 'N/A')}\n")
+            file.write(f"Registrar: {domainResult.get('registrar', 'N/A')}\n")
+            file.write(f"Registrar URL: {domainResult.get('registrar_url', 'N/A')}\n")
+            file.write(f"Reseller: {domainResult.get('reseller', 'N/A')}\n")
+            file.write(f"WHOIS Server: {domainResult.get('whois_server', 'N/A')}\n")
+            file.write(f"Creation Date: {format_date(domainResult.get('creation_date'))}\n")
+            file.write(f"Expiration Date: {format_date(domainResult.get('expiration_date'))}\n")
+            file.write(f"Updated Date: {format_date(domainResult.get('updated_date'))}\n")
+    
+        
+        name_servers = domainResult.get('name_servers', [])
+        with open(filename, "a", encoding="utf-8") as file:
+            file.write(f"Name Servers: {', '.join(name_servers) if name_servers else 'N/A'}\n")
+            file.write(f"DNSSEC: {domainResult.get('dnssec', 'N/A')}\n")
+        
+            # Registrant Information
+            file.write("----------------------------------------\n")
+            file.write(f"Name: {domainResult.get('name', 'N/A')}\n")
+            file.write(f"Organization: {domainResult.get('org', 'N/A')}\n")
+            file.write(f"Address: {domainResult.get('address', 'N/A')}\n")
+            file.write(f"City: {domainResult.get('city', 'N/A')}\n")
+            file.write(f"State: {domainResult.get('state', 'N/A')}\n")
+            file.write(f"Postal Code: {domainResult.get('registrant_postal_code', 'N/A')}\n")
+            file.write(f"Country: {domainResult.get('country', 'N/A')}\n")
+        
+    else:
+        with open(filename, "a", encoding="utf-8") as file:
+            file.write("Could not retrieve domain WHOIS data.\n")
+
+    # VirusTotal Report Result
+    print("----------------------------------------")
+    if abuseResult:
+        if abuseResult.get("query_status") == "not_found":
+            with open(filename, "a", encoding="utf-8") as file:
+                file.write(f"Domain not found in VirusTotal database.\n")
+        else:
+            last_analysis_stats = abuseResult.get("last_analysis_stats", {})
+            malicious = last_analysis_stats.get("malicious", 0)
+            suspicious = last_analysis_stats.get("suspicious", 0)
+            undetected = last_analysis_stats.get("undetected", 0)
+            harmless = last_analysis_stats.get("harmless", 0)
+            
+            # Determine status based on count
+            if malicious > 0:
+                status = "FLAGGED / MALICIOUS"
+            elif suspicious > 0:
+                status = "SUSPICIOUS"
+            else:
+                status = "CLEAN"
+
+            with open(filename, "a", encoding="utf-8") as file:
+                file.write(f"VirusTotal Status: {status}\n")
+                file.write(f"Malicious: {malicious}\n")
+                file.write(f"Suspicious: {suspicious}\n")
+                file.write(f"Undetected: {undetected}\n")
+                file.write(f"Harmless: {harmless}\n")
+                file.write(f"VirusTotal Link: {abuseResult.get('link', 'N/A')}\n")
+    else:
+        with open(filename, "a", encoding="utf-8") as file:
+            file.write("VirusTotal data unavailable.\n")
+    with open(filename, "a", encoding="utf-8") as file:
+        file.write("----------------------------------------")
+
+
+# Download IPv4 Function
 def downloadIP(ipresult, abuseresult=None, latencyresult=None, portresult=None, target_ports=None, filename=None):
     with open(filename, "w", encoding="utf-8") as file:
         file.write("----------------------------------------\n")
@@ -530,6 +616,19 @@ while True:
         domainResult = getDomainInfo(user_input)
         abuseResult = checkAbuseDomain(user_input)
         outputDomain(domainResult, abuseResult)
+        # Download Functionality
+        user_input = input("Do you want to download the result? [y or n] ")
+        
+        if user_input == "y" or user_input == "yes":
+            file = "resultDomain.txt"
+            downloadDomain(domainResult, abuseResult, file)
+            # Move file to downloads folder
+            source_file = Path(file)
+            downloads_folder = Path.home() / "Downloads"
+            shutil.move(str(source_file), str(downloads_folder / source_file.name))
+            print("Downloading file ...........")
+            print("The output has been downloaded! You can view it in your downloads folder")
+            print(f"The file name is {file}")
 
     # Handle IP input
     else:
@@ -556,7 +655,7 @@ while True:
         # Display the output
         outputIP(ipResult, abuseResult, latencyResult, portResult, target_ports)
 
-        #Download Functionality
+        # Download Functionality
         user_input = input("Do you want to download the result? [y or n] ")
 
         if user_input == "y" or user_input == "yes":
